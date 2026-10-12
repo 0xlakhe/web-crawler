@@ -1,11 +1,13 @@
-package main
+package workerCrawler
 
 import (
+
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+
 	"sync"
 
 	"golang.org/x/net/html"
@@ -17,6 +19,13 @@ type crawlResult struct {
 	err     error
 }
 
+type Service struct{
+}
+
+func NewService() *Service{
+	return &Service{}
+}
+
 func workers(receiveURL <-chan string, sendURL chan<- crawlResult) {
 
 	for url:=range receiveURL{
@@ -24,21 +33,19 @@ func workers(receiveURL <-chan string, sendURL chan<- crawlResult) {
 		if err != nil {
 			sendURL <- crawlResult{url, nil, err}
 		}
-		
 		sendURL <- crawlResult{url, links, nil}
 	}
 }
 
-func main() {
-	baseURL := "https://web-scraping.dev/"
+func (s *Service) Crawl(req crawlRequest) (*crawlResponse,error) {
 
 	receiveURL := make(chan string, 50)
 	sendURL := make(chan crawlResult)
-	receiveURL <- baseURL
+	receiveURL <- req.URL
 	allURLs := map[string][]string{}
 
 	allLinks := map[string]int{}
-	allLinks[baseURL] = 1
+	allLinks[req.URL] = 1
 	var wg sync.WaitGroup
 
 	maxWorkers := 5
@@ -81,8 +88,8 @@ func main() {
 		}
 		allURLs[urls.baseURL] = toAdd
 	}
-
-	fmt.Println(allURLs)
+	
+	return &crawlResponse{URLs: allURLs},nil
 }
 
 func downloadLink(baseURL string) ([]string, error) {

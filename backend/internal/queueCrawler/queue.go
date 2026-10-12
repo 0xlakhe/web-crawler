@@ -1,4 +1,6 @@
-package main
+//Implemented crawler using queue
+
+package queueCrawler
 
 import (
 	"errors"
