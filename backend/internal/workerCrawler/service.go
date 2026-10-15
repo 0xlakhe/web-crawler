@@ -1,12 +1,13 @@
 package workerCrawler
 
 import (
-
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"time"
 
 	"sync"
 
@@ -19,16 +20,16 @@ type crawlResult struct {
 	err     error
 }
 
-type Service struct{
+type Service struct {
 }
 
-func NewService() *Service{
+func NewService() *Service {
 	return &Service{}
 }
 
 func workers(receiveURL <-chan string, sendURL chan<- crawlResult) {
 
-	for url:=range receiveURL{
+	for url := range receiveURL {
 		links, err := downloadLink(url)
 		if err != nil {
 			sendURL <- crawlResult{url, nil, err}
@@ -37,8 +38,8 @@ func workers(receiveURL <-chan string, sendURL chan<- crawlResult) {
 	}
 }
 
-func (s *Service) Crawl(req crawlRequest) (*crawlResponse,error) {
-
+func (s *Service) Crawl(ctx context.Context,req crawlRequest) (*crawlResponse, error) {
+	now:=time.Now()
 	receiveURL := make(chan string, 50)
 	sendURL := make(chan crawlResult)
 	receiveURL <- req.URL
@@ -57,14 +58,14 @@ func (s *Service) Crawl(req crawlRequest) (*crawlResponse,error) {
 		}()
 	}
 
-	go func(){
+	go func() {
 		wg.Wait()
 		close(sendURL)
 	}()
-	crawlLimit:=20
-	check:=false
+	crawlLimit := 20
+	check := false
 	for urls := range sendURL {
-		if urls.err!=nil{
+		if urls.err != nil {
 			log.Print(urls.err)
 			continue
 		}
@@ -73,23 +74,24 @@ func (s *Service) Crawl(req crawlRequest) (*crawlResponse,error) {
 			if _, ok := allLinks[url]; !ok {
 				allLinks[url] = 1
 				toAdd = append(toAdd, url)
-				crawlLimit-=1
-				if check==true{
+				crawlLimit -= 1
+				if check == true {
 					continue
 				}
-				if crawlLimit<1{
+				if crawlLimit < 1 {
 					close(receiveURL)
-					check=true
+					check = true
 					continue
 				}
 
-				receiveURL<-url
+				receiveURL <- url
 			}
 		}
 		allURLs[urls.baseURL] = toAdd
 	}
-	
-	return &crawlResponse{URLs: allURLs},nil
+	total:=time.Since(now)
+	timeTaken:=fmt.Sprintf("%.2f secs",total.Seconds())
+	return &crawlResponse{URLs: allURLs,TimeTaken: timeTaken}, nil
 }
 
 func downloadLink(baseURL string) ([]string, error) {

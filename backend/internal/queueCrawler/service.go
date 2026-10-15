@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"net/http"
 	"net/url"
@@ -28,15 +29,23 @@ func (q *queue[T]) dequeue() (T, error) {
 	if len(q.Urls) == 0 {
 		return zero, errorQueueEmpty
 	}
-	fmt.Println(len(q.Urls))
 	res := q.Urls[0]
 	q.Urls[0] = zero
 	q.Urls = q.Urls[1:]
 	return res, nil
 }
 
-func main() {
-	baseUrl := "https://web-scraping.dev/"
+type Service struct{
+
+}
+
+func NewService()*Service{
+	return &Service{}
+}
+
+func (s *Service)Crawl(req crawlRequest)(*crawlResponse,error) {
+	now:=time.Now()
+	baseUrl := req.URL
 	htmlUrls := map[string][]string{}
 	queue := queue[string]{}
 	queue.enqueue(baseUrl)
@@ -45,15 +54,13 @@ func main() {
 	maxPages := 20
 	currentPage := 1
 	for currentPage < maxPages {
-		fmt.Printf("ID: %d\n", currentPage)
 		baseURL, err := queue.dequeue()
 		if err != nil {
 			if errors.Is(err, errorQueueEmpty) {
-				fmt.Println(err)
-				break
+				return nil,err
 			} else {
-				fmt.Println(err)
-				return
+				
+				return nil,err
 			}
 		}
 		urls, err := downloadLink(baseURL)
@@ -71,15 +78,16 @@ func main() {
 		}
 
 		if err != nil {
-			fmt.Println(err)
-			return
+			return nil,err
 		}
-		fmt.Printf("\n\n, %v", htmlUrls)
 
 		//saving urls
 		htmlUrls[baseURL] = allLinks
 		currentPage += 1
 	}
+	total:=time.Since(now)
+	timeTaken:=fmt.Sprintf("%.2f secs",total.Seconds())
+	return &crawlResponse{URLs: htmlUrls, TimeTaken: timeTaken},nil
 
 }
 
