@@ -3,15 +3,13 @@ package workerCrawler
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"net/url"
+
 	"time"
 
 	"sync"
 
-	"golang.org/x/net/html"
+	downloadlink "github.com/0xlakhe/web-scrapper-go.git/internal/downloadLink"
 )
 
 type crawlResult struct {
@@ -30,7 +28,7 @@ func NewService() *Service {
 func workers(receiveURL <-chan string, sendURL chan<- crawlResult) {
 
 	for url := range receiveURL {
-		links, err := downloadLink(url)
+		links, err := downloadlink.Download(url)
 		if err != nil {
 			sendURL <- crawlResult{url, nil, err}
 		}
@@ -49,6 +47,7 @@ func (s *Service) Crawl(ctx context.Context,req crawlRequest) (*crawlResponse, e
 	allLinks[req.URL] = 1
 	var wg sync.WaitGroup
 
+	//max concurrent workers
 	maxWorkers := 5
 	for range maxWorkers {
 		wg.Add(1)
@@ -62,6 +61,8 @@ func (s *Service) Crawl(ctx context.Context,req crawlRequest) (*crawlResponse, e
 		wg.Wait()
 		close(sendURL)
 	}()
+
+	//crawl limit
 	crawlLimit := 20
 	check := false
 	for urls := range sendURL {
@@ -94,43 +95,3 @@ func (s *Service) Crawl(ctx context.Context,req crawlRequest) (*crawlResponse, e
 	return &crawlResponse{URLs: allURLs,TimeTaken: timeTaken}, nil
 }
 
-func downloadLink(baseURL string) ([]string, error) {
-	resp, err := http.Get(baseURL)
-	if err != nil {
-		return nil, err
-	}
-	token := html.NewTokenizer(resp.Body)
-	result := []string{}
-
-	for {
-		tokenType := token.Next()
-		switch tokenType {
-		case html.ErrorToken:
-			if token.Err() == io.EOF {
-				fmt.Println("reached end of file")
-				return result, nil
-			}
-			return nil, fmt.Errorf("error: %v", token.Token().Data)
-		case html.StartTagToken:
-			t := token.Token()
-			if t.Data == "a" {
-
-				for _, attribute := range t.Attr {
-					if attribute.Key == "href" {
-						relativeURL, err := url.Parse(attribute.Val)
-
-						if err != nil {
-							continue
-						}
-						base, err := url.Parse(baseURL)
-						if err != nil {
-							continue
-						}
-						toAdd := base.ResolveReference(relativeURL)
-						result = append(result, toAdd.String())
-					}
-				}
-			}
-		}
-	}
-}

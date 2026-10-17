@@ -1,4 +1,5 @@
-package main
+//only for learning purpose
+package routines
 
 import (
 	"fmt"
